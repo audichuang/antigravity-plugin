@@ -1,0 +1,21 @@
+{
+  "name": "antigravity",
+  "owner": {
+    "name": "Sakib Sadman Shajib"
+  },
+  "metadata": {
+    "description": "Antigravity plugins to use in Claude Code for delegation and code review via agy.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "antigravity",
+      "description": "Use Google Antigravity (agy) from Claude Code to review code or delegate tasks.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Sakib Sadman Shajib"
+      },
+      "source": "."
+    }
+  ]
+}
