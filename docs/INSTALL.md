@@ -26,13 +26,50 @@ claude plugin install antigravity@sakibsadmanshajib
 
 ## Codex CLI
 
+Codex auto-discovers `antigravity-plugin` via three files at the plugin install
+root: `.codex-plugin/plugin.json` (canonical manifest), `SKILL.md` (skill
+discovery), and `agents/openai.yaml` (the `$antigravity` implicit-invocation
+contract). Per the [OpenAI Codex plugin docs](https://developers.openai.com/codex/plugins/build),
+plugins are registered through a marketplace descriptor at either
+`$REPO_ROOT/.agents/plugins/marketplace.json` (repo-scoped) or
+`~/.agents/plugins/marketplace.json` (personal).
+
+### Option A — `codex plugin marketplace add` (recommended)
+
 ```bash
-git clone https://github.com/sakibsadmanshajib/antigravity-plugin.git
-cd antigravity-plugin
-codex plugin marketplace add .
-# inside Codex CLI:
+git clone https://github.com/sakibsadmanshajib/antigravity-plugin.git ~/code/antigravity-plugin
+codex plugin marketplace add ~/code/antigravity-plugin
+# the local marketplace is the repo's .agents/plugins/marketplace.json
+codex plugin marketplace list                    # confirm it shows up
+# restart Codex, then inside Codex CLI:
 $antigravity setup
+$antigravity review --base main
 ```
+
+### Option B — personal marketplace
+
+If you prefer to keep one curated personal marketplace, copy the entry from
+this repo's `.agents/plugins/marketplace.json` into `~/.agents/plugins/marketplace.json`
+under the `plugins[]` array, pointing `source.path` at your local clone:
+
+```json
+{
+  "name": "personal",
+  "interface": { "displayName": "Personal plugins" },
+  "plugins": [
+    {
+      "name": "antigravity",
+      "source": { "source": "local", "path": "~/code/antigravity-plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity",
+      "interface": { "displayName": "Antigravity (agy)" }
+    }
+  ]
+}
+```
+
+Restart Codex; the plugin is available under `$antigravity`. Verbs:
+`setup`, `review`, `rescue`, `task`, `status`, `result`, `cancel`.
 
 ## agy itself
 

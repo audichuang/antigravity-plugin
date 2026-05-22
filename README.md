@@ -26,7 +26,7 @@ preferred AI host so you can:
 | Host             | Install command                                                    |
 |------------------|--------------------------------------------------------------------|
 | Claude Code      | `claude plugin install antigravity@sakibsadmanshajib`              |
-| Codex CLI        | `codex plugin marketplace add` (see [docs/INSTALL.md](./docs/INSTALL.md)) |
+| Codex CLI        | `codex plugin marketplace add <path-to-clone>` then `$antigravity setup` (see [docs/INSTALL.md](./docs/INSTALL.md)) |
 | Antigravity (agy)| `agy plugin install antigravity@sakibsadmanshajib`                 |
 | Standalone       | `npx antigravity-plugin <command>`                                 |
 

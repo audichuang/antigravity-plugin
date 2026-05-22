@@ -8,3 +8,6 @@ dist/
 .cache/
 .tmp/
 *.tgz
+
+# agy / Antigravity CLI local state created by `agy plugin validate` and friends
+.antigravitycli/
