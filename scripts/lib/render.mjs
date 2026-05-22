@@ -254,12 +254,12 @@ export function renderSingleJobStatus(snapshotOrJob, options = {}) {
  */
 export function renderResultOutput(cwd, job, storedJob) {
   const threadId = storedJob?.threadId ?? job.threadId ?? null;
-  const resumeCommand = threadId ? `gemini --resume ${threadId}` : null;
+  const resumeCommand = threadId ? `agy --conversation ${threadId}` : null;
 
   // If there's raw text output, return it.
   const rawOutput =
     (typeof storedJob?.result?.rawOutput === "string" && storedJob.result.rawOutput) ||
-    (typeof storedJob?.result?.gemini?.stdout === "string" && storedJob.result.gemini.stdout) ||
+    (typeof storedJob?.result?.agy?.stdout === "string" && storedJob.result.agy.stdout) ||
     "";
   if (rawOutput) {
     const output = rawOutput.endsWith("\n") ? rawOutput : `${rawOutput}\n`;
