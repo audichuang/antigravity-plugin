@@ -11,3 +11,6 @@ dist/
 
 # agy / Antigravity CLI local state created by `agy plugin validate` and friends
 .antigravitycli/
+
+# CodeGraph local index (per-machine cache; never committed)
+.codegraph/
