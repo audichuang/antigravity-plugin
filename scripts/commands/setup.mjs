@@ -7,6 +7,7 @@
  */
 import { spawn } from 'node:child_process';
 import { resolveAgyBin, probeAgy } from '../lib/agent-runtime.mjs';
+import { runAsMain } from '../lib/cli-entry.mjs';
 
 export async function run(argv = [], ctx = {}) {
   const bin = resolveAgyBin();
@@ -38,3 +39,5 @@ export async function run(argv = [], ctx = {}) {
 }
 
 export default run;
+
+runAsMain(import.meta.url, run, "setup");

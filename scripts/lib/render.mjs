@@ -3,6 +3,63 @@
  */
 
 /**
+ * Tolerantly extract the structured review object agy was asked to emit. agy
+ * `--print` returns free text, so the model may wrap the JSON in a ```json
+ * fence or surround it with prose; we strip the fence or slice the outermost
+ * `{...}`. Returns a normalized review (renderReviewResult-ready) or null when
+ * no JSON object can be recovered.
+ *
+ * @param {string} stdout
+ * @returns {object|null}
+ */
+export function parseReviewJson(stdout) {
+  if (typeof stdout !== "string") return null;
+  let text = stdout.trim();
+  if (!text) return null;
+
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) {
+    text = fence[1].trim();
+  } else if (!text.startsWith("{")) {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1 || end < start) return null;
+    text = text.slice(start, end + 1);
+  }
+
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  return normalizeReview(obj);
+}
+
+function normalizeReview(obj) {
+  return {
+    verdict: typeof obj.verdict === "string" ? obj.verdict : "needs_attention",
+    summary: typeof obj.summary === "string" ? obj.summary : "",
+    findings: Array.isArray(obj.findings) ? obj.findings.map(normalizeFinding) : [],
+    next_steps: Array.isArray(obj.next_steps) ? obj.next_steps.filter((s) => typeof s === "string") : [],
+  };
+}
+
+function normalizeFinding(f) {
+  return {
+    severity: typeof f?.severity === "string" ? f.severity.toLowerCase() : "medium",
+    title: typeof f?.title === "string" ? f.title : "(untitled)",
+    body: typeof f?.body === "string" ? f.body : "",
+    file: typeof f?.file === "string" ? f.file : "",
+    line_start: Number.isFinite(f?.line_start) ? f.line_start : 0,
+    line_end: Number.isFinite(f?.line_end) ? f.line_end : 0,
+    confidence: Number.isFinite(f?.confidence) ? f.confidence : 0.5,
+    recommendation: typeof f?.recommendation === "string" ? f.recommendation : "",
+  };
+}
+
+/**
  * Render a structured review result (from adversarial review) as markdown.
  *
  * @param {{ verdict: string, summary: string, findings: Array<{ severity: string, title: string, body: string, file: string, line_start: number, line_end: number, confidence: number, recommendation: string }>, next_steps: string[] }} review
@@ -252,9 +309,20 @@ export function renderSingleJobStatus(snapshotOrJob, options = {}) {
  * @param {any} storedJob - The full stored job file data.
  * @returns {string}
  */
+/**
+ * agy does not expose the conversation id in `--print` output, so we can rarely
+ * capture a thread id. When we have one, point at `--conversation <id>`;
+ * otherwise point at the working `--continue` (resume the most recent).
+ */
+function formatResumeHint(threadId) {
+  if (threadId) {
+    return `\nConversation ID: ${threadId}\nResume conversation: agy --conversation ${threadId}\n`;
+  }
+  return "\nResume the most recent agy conversation: agy --continue (or /antigravity:rescue --continue)\n";
+}
+
 export function renderResultOutput(cwd, job, storedJob) {
   const threadId = storedJob?.threadId ?? job.threadId ?? null;
-  const resumeCommand = threadId ? `agy --conversation ${threadId}` : null;
 
   // If there's raw text output, return it.
   const rawOutput =
@@ -263,19 +331,13 @@ export function renderResultOutput(cwd, job, storedJob) {
     "";
   if (rawOutput) {
     const output = rawOutput.endsWith("\n") ? rawOutput : `${rawOutput}\n`;
-    if (!threadId) {
-      return output;
-    }
-    return `${output}\nConversation ID: ${threadId}\nResume conversation: ${resumeCommand}\n`;
+    return `${output}${formatResumeHint(threadId)}`;
   }
 
   // If there's pre-rendered output, return it.
   if (storedJob?.rendered) {
     const output = storedJob.rendered.endsWith("\n") ? storedJob.rendered : `${storedJob.rendered}\n`;
-    if (!threadId) {
-      return output;
-    }
-    return `${output}\nConversation ID: ${threadId}\nResume conversation: ${resumeCommand}\n`;
+    return `${output}${formatResumeHint(threadId)}`;
   }
 
   // Fallback: build from job metadata.
@@ -288,7 +350,9 @@ export function renderResultOutput(cwd, job, storedJob) {
 
   if (threadId) {
     lines.push(`Conversation ID: ${threadId}`);
-    lines.push(`Resume conversation: ${resumeCommand}`);
+    lines.push(`Resume conversation: agy --conversation ${threadId}`);
+  } else {
+    lines.push("Resume the most recent agy conversation: agy --continue (or /antigravity:rescue --continue)");
   }
 
   if (job.summary) {

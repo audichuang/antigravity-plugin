@@ -217,23 +217,24 @@ describe('/antigravity:cancel', () => {
     assert.match(cap.err.join(''), /No active antigravity jobs/);
   });
 
-  it('marks a running job cancelled when killed (with a fake pid)', async () => {
+  it('marks a running job cancelled (no tracked pid to signal)', async () => {
     const id = 'runningjob';
     ensureStateDir(tempDir);
-    // Use a PID that is guaranteed not to exist so process.kill throws and we
-    // verify the state mutation still happens.
+    // A running job with no recorded worker pid: the dead-PID reconcile skips it
+    // (no pid), and cancel marks it cancelled without signalling anything. A
+    // dead-pid running job is instead auto-failed by reconcile (reconcile.test.mjs).
     await upsertJob(tempDir, {
       id,
       kind: 'task',
       status: 'running',
       phase: 'running',
       sessionId: process.env.ANTIGRAVITY_PLUGIN_SESSION_ID,
-      pid: 2 ** 22,
+      pid: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       startedAt: new Date().toISOString(),
     });
-    await writeJobFile(tempDir, id, { id, status: 'running', pid: 2 ** 22 });
+    await writeJobFile(tempDir, id, { id, status: 'running', pid: null });
 
     const { run } = await import('../scripts/commands/cancel.mjs');
     const cap = captureStdio();

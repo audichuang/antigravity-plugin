@@ -15,6 +15,7 @@
  */
 
 import { parseCommandInput } from "../lib/args.mjs";
+import { runAsMain } from "../lib/cli-entry.mjs";
 import { resolveWorkspaceRoot } from "../lib/workspace.mjs";
 import { buildTaskPrompt } from "../lib/prompt-templates.mjs";
 import { runForegroundJob, startBackgroundJob, waitForJob } from "../lib/job-helpers.mjs";
@@ -22,12 +23,13 @@ import { outputCommandResult } from "../lib/render.mjs";
 
 export async function run(argv = [], ctx = {}) {
   const { options, positionals } = parseCommandInput(argv, {
-    valueOptions: ["conversation", "cwd", "add-dir"],
+    valueOptions: ["conversation", "cwd", "add-dir", "model"],
     booleanOptions: ["wait", "foreground", "continue", "json"],
   });
 
   const cwd = options.cwd ? String(options.cwd) : ctx.cwd ?? process.cwd();
   const workspaceRoot = resolveWorkspaceRoot(cwd);
+  const model = options.model ? String(options.model) : undefined;
 
   const userPrompt = positionals.join(" ").trim();
   if (!userPrompt && !options.continue && !options.conversation) {
@@ -62,8 +64,9 @@ export async function run(argv = [], ctx = {}) {
       mode,
       conversationId,
       addDirs,
+      model,
       cwd: workspaceRoot,
-      request: { mode, addDirs },
+      request: { mode, addDirs, model },
       onStdout: (chunk) => process.stderr.write(chunk),
     });
 
@@ -93,7 +96,7 @@ export async function run(argv = [], ctx = {}) {
     conversationId,
     addDirs,
     cwd: workspaceRoot,
-    request: { mode, addDirs },
+    request: { mode, addDirs, model },
   });
   const payload = {
     jobId: job.id,
@@ -122,3 +125,5 @@ function truncate(s, n) {
 }
 
 export default run;
+
+runAsMain(import.meta.url, run, "task");

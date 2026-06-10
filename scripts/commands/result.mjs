@@ -8,6 +8,7 @@
  */
 
 import { parseCommandInput } from "../lib/args.mjs";
+import { runAsMain } from "../lib/cli-entry.mjs";
 import { resolveResultJob } from "../lib/job-control.mjs";
 import { readJobFile } from "../lib/state.mjs";
 import { outputCommandResult, renderResultOutput } from "../lib/render.mjs";
@@ -53,3 +54,5 @@ export async function run(argv = [], ctx = {}) {
 }
 
 export default run;
+
+runAsMain(import.meta.url, run, "result");

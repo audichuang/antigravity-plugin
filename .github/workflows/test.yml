@@ -1,0 +1,23 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The suite uses node --test --experimental-test-module-mocks (mock.module),
+        # which requires Node >= 22.3 even though the plugin runtime supports >=18.18.
+        node-version: ['22.x', '24.x']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Run the hermetic test suite
+        run: npm test

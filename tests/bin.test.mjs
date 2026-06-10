@@ -85,6 +85,20 @@ export async function run(argv, ctx) {
     assert.match(res.stdout, /--scope/);
   });
 
+  it('help image prints the image command help and exits 0', () => {
+    const res = run(['help', 'image']);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /antigravity-plugin image/);
+    assert.match(res.stdout, /--output/);
+    assert.match(res.stdout, /--name/);
+  });
+
+  it('lists image in the top-level help', () => {
+    const res = run([]);
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /image/);
+  });
+
   it('unknown command suggests closest match and exits 2', () => {
     const res = run(['reviw']);
     assert.equal(res.status, 2);

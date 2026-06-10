@@ -2,7 +2,7 @@
  * Job querying, enrichment, and resolution for status/result/cancel commands.
  *
  * Lean port from gemini-plugin-cc — ACP / broker references removed because
- * agy 1.0.1 has no ACP. Health classifier still tracks `auth_required`,
+ * agy's print mode has no ACP. Health classifier still tracks `auth_required`,
  * `rate_limited`, `failed`, and `worker_missing` (the four signals we can
  * still capture from stdout / process state).
  */

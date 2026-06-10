@@ -173,7 +173,10 @@ describe('classifyRuntimeHealth — branches via buildSingleJobSnapshot', () => 
   });
 
   it('worker_missing when pid is dead (via injected isProcessAlive)', async () => {
-    const job = await seedJob({ id: 'h-dead', status: 'running', pid: 12345 });
+    // Use a live pid (this process) so the listJobs dead-PID reconcile does NOT
+    // auto-fail it; we exercise the health classifier in isolation via the
+    // injected isProcessAlive seam.
+    const job = await seedJob({ id: 'h-dead', status: 'running', pid: process.pid });
     const snap = buildSingleJobSnapshot(workCwd, job.id, { isProcessAlive: () => false });
     assert.equal(snap.job.healthStatus, 'worker_missing');
   });

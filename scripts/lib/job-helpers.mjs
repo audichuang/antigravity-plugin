@@ -2,14 +2,15 @@
  * job-helpers — shared helpers for command modules.
  *
  * Provides job id minting, foreground/background tracking glue, and stdout
- * persistence around `runAgyPrint` / `spawnAgyDetached`. agy 1.0.1 only
+ * persistence around `runAgyPrint` / `spawnAgyDetached`. agy's print mode only
  * exposes a final-response stdout — no streaming, no tool events — so the
  * helpers here intentionally avoid any event-bus or phase machinery.
  */
 
 import { randomBytes } from "node:crypto";
 
-import { runAgyPrint, spawnAgyDetached, resolveAgyBin } from "./agent-runtime.mjs";
+import { runAgyPrint, spawnAgyDetached, resolveAgyBin, resolveAgyTimeouts } from "./agent-runtime.mjs";
+import { deriveSummary, trimToNull } from "./text.mjs";
 import {
   appendJobLog,
   resolveJobLogFile,
@@ -141,12 +142,15 @@ export async function runForegroundJob({
   mode = "print",
   conversationId,
   addDirs = [],
+  model,
+  sandbox = false,
   cwd,
   request = null,
   env = process.env,
   onStdout,
   onStderr,
 } = {}) {
+  const { printMs, hardMs } = resolveAgyTimeouts(env);
   const job = await createTrackedJob({
     workspaceRoot,
     kind,
@@ -172,7 +176,11 @@ export async function runForegroundJob({
       mode,
       conversationId,
       addDirs,
+      model,
+      sandbox,
       cwd: cwd ?? workspaceRoot,
+      timeoutMs: hardMs,
+      printTimeoutMs: printMs,
       onStdout,
       onStderr,
     });
@@ -196,9 +204,9 @@ export async function runForegroundJob({
     phase: derived.status,
     completedAt,
     exitCode: result.exitCode,
-    summary: deriveSummary(result),
+    summary: deriveSummary(result.stdout),
     oauthUrl: result.oauthUrl ?? null,
-    errorMessage: result.status === "failed" ? trim(result.stderr) : null,
+    errorMessage: result.status === "failed" ? trimToNull(result.stderr) : null,
     healthStatus: derived.healthStatus ?? null,
     healthMessage: derived.healthMessage ?? null,
     recommendedAction: derived.recommendedAction ?? null,
@@ -267,6 +275,22 @@ export async function startBackgroundJob({
     pid: child.pid ?? null,
   });
   appendJobLog(workspaceRoot, job.id, `[job] dispatched worker pid=${child.pid}`);
+
+  // Best-effort: spawn a detached liveness watchdog that reaps this job if the
+  // worker dies or wedges, without anyone needing to poll /antigravity:status.
+  try {
+    const watchdogPath = new URL("../commands/_watchdog.mjs", import.meta.url).pathname;
+    const watchdog = spawn(process.execPath, [watchdogPath, workspaceRoot, job.id], {
+      cwd: workspaceRoot,
+      detached: true,
+      stdio: ["ignore", "ignore", "ignore"],
+      env: { ...env, [SESSION_ID_ENV]: env[SESSION_ID_ENV] ?? "" },
+    });
+    watchdog.unref();
+  } catch {
+    // The watchdog is a safety net; never block job launch on its failure.
+  }
+
   return { job, pid: child.pid ?? null };
 }
 
@@ -285,19 +309,6 @@ export async function waitForJob(workspaceRoot, jobId, { pollMs = 1000, timeoutM
     if (deadline && Date.now() > deadline) return job ?? null;
     await new Promise((r) => setTimeout(r, pollMs));
   }
-}
-
-function deriveSummary(result) {
-  if (!result?.stdout) return null;
-  const firstLine = result.stdout.split("\n").map((s) => s.trim()).find(Boolean);
-  if (!firstLine) return null;
-  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
-}
-
-function trim(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
 }
 
 /** Re-export so command modules can pull everything from one place. */

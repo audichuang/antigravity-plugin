@@ -15,6 +15,28 @@ import { resolve as resolvePath, join } from 'node:path';
 /** Default binary name. Override via env `AGY_BIN`. */
 export const DEFAULT_AGY_BIN = 'agy';
 
+/** agy's own print-mode wait default is 5m; we forward it explicitly. */
+export const DEFAULT_PRINT_TIMEOUT_MS = 300000;
+
+/**
+ * Resolve the print-mode timeouts:
+ *  - `printMs`: forwarded to agy as `--print-timeout` (env `AGY_PRINT_TIMEOUT_MS`).
+ *  - `hardMs`: a Node-side SIGTERM backstop in case agy ignores its own timeout
+ *    (env `AGY_JOB_TIMEOUT_MS`; defaults to printMs + 60s grace).
+ */
+export function resolveAgyTimeouts(env = process.env) {
+  const printOverride = Number(env.AGY_PRINT_TIMEOUT_MS);
+  const printMs = Number.isFinite(printOverride) && printOverride > 0 ? printOverride : DEFAULT_PRINT_TIMEOUT_MS;
+  const hardOverride = Number(env.AGY_JOB_TIMEOUT_MS);
+  const hardMs = Number.isFinite(hardOverride) && hardOverride > 0 ? hardOverride : printMs + 60000;
+  return { printMs, hardMs };
+}
+
+/** Format milliseconds as a Go duration string (agy's `--print-timeout` unit). */
+function toGoDuration(ms) {
+  return `${Math.max(1, Math.ceil(Number(ms) / 1000))}s`;
+}
+
 /** Sentinel lines surfaced by `agy --print` when the user needs to (re-)auth. */
 const AUTH_LINE_PATTERNS = [
   /^Authentication required\.?\s*Please visit the URL to log in/i,
@@ -88,6 +110,9 @@ export async function runAgyPrint({
   cwd = process.cwd(),
   addDirs = [],
   timeoutMs = 0,
+  printTimeoutMs = 0,
+  model,
+  sandbox = false,
   bin = resolveAgyBin(),
   env = process.env,
   onStdout,
@@ -103,6 +128,9 @@ export async function runAgyPrint({
     if (!conversationId) throw new TypeError('runAgyPrint: conversationId required for mode=conversation');
     args.push('--conversation', conversationId);
   }
+  if (model) args.push('--model', String(model));
+  if (sandbox) args.push('--sandbox');
+  if (printTimeoutMs > 0) args.push('--print-timeout', toGoDuration(printTimeoutMs));
   for (const dir of addDirs) args.push('--add-dir', dir);
   args.push('--print', prompt);
 

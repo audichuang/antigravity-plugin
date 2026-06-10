@@ -5,15 +5,22 @@
  * Invoked by job-helpers.startBackgroundJob as:
  *   node scripts/commands/_worker.mjs <jobId>
  *
- * Reads the job file for <jobId> from the resolved workspace state, runs
- * `agy --print` per the persisted request, and updates the job record on
- * completion. Captures stdout to the per-job log file.
+ * Reads the job file for <jobId>, runs `agy --print` per the persisted request,
+ * and finalizes the job record. Every status write goes through
+ * applyJobPatchIfActive so a cancel / watchdog / reconcile racing this worker is
+ * first-terminal-writer-wins, never last-writer.
  */
 
-import { appendJobLog, readJobFile, resolveJobLogFile } from "../lib/state.mjs";
+import {
+  appendJobLog,
+  readJobFile,
+  resolveJobLogFile,
+  applyJobPatchIfActive,
+  touchJobProgress,
+} from "../lib/state.mjs";
 import { resolveWorkspaceRoot } from "../lib/workspace.mjs";
-import { runAgyPrint } from "../lib/agent-runtime.mjs";
-import { patchJob } from "../lib/job-helpers.mjs";
+import { runAgyPrint, resolveAgyTimeouts } from "../lib/agent-runtime.mjs";
+import { deriveSummary, trimToNull } from "../lib/text.mjs";
 
 async function main() {
   const [jobId] = process.argv.slice(2);
@@ -31,7 +38,7 @@ async function main() {
   const request = stored.request ?? {};
   const prompt = request.prompt;
   if (!prompt) {
-    await patchJob(workspaceRoot, jobId, {
+    await applyJobPatchIfActive(workspaceRoot, jobId, {
       status: "failed",
       phase: "failed",
       completedAt: new Date().toISOString(),
@@ -41,22 +48,42 @@ async function main() {
     process.exit(1);
   }
 
-  await patchJob(workspaceRoot, jobId, {
+  const { printMs, hardMs } = resolveAgyTimeouts(process.env);
+
+  // Promote queued → running, but only while still active. If a cancel landed
+  // before we started, this returns applied:false and we must not run agy.
+  // timeoutAt is the hard deadline the watchdog uses to detect a wedged worker.
+  const promoted = await applyJobPatchIfActive(workspaceRoot, jobId, {
     status: "running",
     phase: "running",
     startedAt: new Date().toISOString(),
+    lastHeartbeatAt: new Date().toISOString(),
+    timeoutAt: new Date(Date.now() + hardMs).toISOString(),
     pid: process.pid,
   });
+  if (!promoted.applied) {
+    const finalStatus = promoted.stored?.status ?? "finished";
+    appendJobLog(workspaceRoot, jobId, `[worker] not started; job already ${finalStatus}`);
+    process.exit(finalStatus === "cancelled" ? 2 : 0);
+  }
   appendJobLog(workspaceRoot, jobId, `[worker] started pid=${process.pid}`);
 
   const logPath = resolveJobLogFile(workspaceRoot, jobId);
   const fs = await import("node:fs");
 
+  let lastBeatMs = 0;
   const onStdout = (chunk) => {
     try {
       fs.appendFileSync(logPath, chunk, { encoding: "utf8", mode: 0o600 });
     } catch {
       // best-effort log capture
+    }
+    // Throttled progress heartbeat so /antigravity:status can report 'active'
+    // and the watchdog/health classifier see a live, working job.
+    const now = Date.now();
+    if (now - lastBeatMs > 5000) {
+      lastBeatMs = now;
+      touchJobProgress(workspaceRoot, jobId).catch(() => {});
     }
   };
 
@@ -66,13 +93,17 @@ async function main() {
       prompt,
       mode: request.mode ?? "print",
       conversationId: request.conversationId,
+      model: request.model,
+      sandbox: request.sandbox,
       addDirs: request.addDirs ?? [],
       cwd: request.cwd ?? workspaceRoot,
+      timeoutMs: Number(request.timeoutMs) || hardMs,
+      printTimeoutMs: printMs,
       onStdout,
     });
   } catch (err) {
     appendJobLog(workspaceRoot, jobId, `[worker] error: ${err?.message ?? err}`);
-    await patchJob(workspaceRoot, jobId, {
+    await applyJobPatchIfActive(workspaceRoot, jobId, {
       status: "failed",
       phase: "failed",
       completedAt: new Date().toISOString(),
@@ -91,12 +122,14 @@ async function main() {
   const oauth = result.oauthUrl ?? null;
   const summary = deriveSummary(result.stdout);
 
-  await patchJob(workspaceRoot, jobId, {
+  const finalize = await applyJobPatchIfActive(workspaceRoot, jobId, {
     status,
     phase: status,
     completedAt: new Date().toISOString(),
     exitCode: result.exitCode,
     summary,
+    threadId: result.conversationId ?? null,
+    conversationId: result.conversationId ?? null,
     oauthUrl: oauth,
     healthStatus:
       result.status === "auth_required" ? "auth_required" : status === "failed" ? "failed" : null,
@@ -106,30 +139,27 @@ async function main() {
         : null,
     recommendedAction:
       result.status === "auth_required" ? "Run /antigravity:setup to complete the OAuth flow." : null,
-    errorMessage: status === "failed" ? trim(result.stderr) : null,
+    errorMessage: status === "failed" ? trimToNull(result.stderr) : null,
     result: {
       rawOutput: result.stdout,
       stderr: result.stderr,
       status: result.status,
       exitCode: result.exitCode,
       oauthUrl: oauth,
+      conversationId: result.conversationId ?? null,
     },
   });
-  appendJobLog(workspaceRoot, jobId, `[worker] ${status} exit=${result.exitCode}`);
+
+  if (finalize.applied) {
+    appendJobLog(workspaceRoot, jobId, `[worker] ${status} exit=${result.exitCode}`);
+  } else {
+    appendJobLog(
+      workspaceRoot,
+      jobId,
+      `[worker] finalize skipped; job already ${finalize.stored?.status ?? "finished"}`,
+    );
+  }
   process.exit(status === "completed" ? 0 : 1);
-}
-
-function deriveSummary(stdout) {
-  if (typeof stdout !== "string") return null;
-  const firstLine = stdout.split("\n").map((s) => s.trim()).find(Boolean);
-  if (!firstLine) return null;
-  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
-}
-
-function trim(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
 }
 
 main().catch((err) => {

@@ -27,7 +27,7 @@ Invocation:
 - Use exactly one `Bash` call to invoke `node "${CLAUDE_PLUGIN_ROOT}/scripts/commands/rescue.mjs" ...` and return that command's stdout as-is.
 - Strip `--background` and `--wait` from the task text — they are Claude Code execution flags.
 - Everything remaining after stripping flags is the task text — pass it through as the trailing positional.
-- `--model <id>` is accepted but currently logged-and-ignored: agy 1.0.1 does not expose a per-invocation model flag. Forward the flag anyway so the warning surfaces in stderr.
+- `--model <id>` is forwarded to agy verbatim (agy has a native `--model`); pass it through unchanged. `--prompt-file <path>` reads the prompt from a file (used by `/antigravity:handoff`).
 
 Auth note:
 - If the helper output says Antigravity is missing or not authenticated, stop and ask the user to run `/antigravity:setup`.

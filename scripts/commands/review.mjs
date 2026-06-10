@@ -12,6 +12,7 @@
  */
 
 import { parseCommandInput } from "../lib/args.mjs";
+import { runAsMain } from "../lib/cli-entry.mjs";
 import { collectReviewContext } from "../lib/git.mjs";
 import { buildReviewPrompt } from "../lib/prompt-templates.mjs";
 import { resolveWorkspaceRoot } from "../lib/workspace.mjs";
@@ -20,14 +21,18 @@ import { outputCommandResult } from "../lib/render.mjs";
 
 export async function run(argv = [], ctx = {}) {
   const { options } = parseCommandInput(argv, {
-    valueOptions: ["base", "scope", "conversation", "cwd"],
-    booleanOptions: ["background", "wait", "continue", "json"],
+    valueOptions: ["base", "scope", "conversation", "cwd", "model"],
+    booleanOptions: ["background", "wait", "continue", "json", "no-sandbox"],
   });
 
   const cwd = options.cwd ? String(options.cwd) : ctx.cwd ?? process.cwd();
   const workspaceRoot = resolveWorkspaceRoot(cwd);
   const scope = (options.scope ? String(options.scope) : "auto");
   const base = options.base ? String(options.base) : undefined;
+  const model = options.model ? String(options.model) : undefined;
+  // Review is read-only: run agy under --sandbox so a misbehaving model cannot
+  // mutate the tree. Escape hatch: --no-sandbox.
+  const sandbox = !options["no-sandbox"];
 
   let envelope;
   try {
@@ -60,7 +65,7 @@ export async function run(argv = [], ctx = {}) {
       mode,
       conversationId,
       cwd: workspaceRoot,
-      request: { scope: envelope.scope, base: base ?? null, mode },
+      request: { scope: envelope.scope, base: base ?? null, mode, model, sandbox },
     });
     const payload = {
       jobId: job.id,
@@ -86,8 +91,10 @@ export async function run(argv = [], ctx = {}) {
     prompt,
     mode,
     conversationId,
+    model,
+    sandbox,
     cwd: workspaceRoot,
-    request: { scope: envelope.scope, base: base ?? null, mode },
+    request: { scope: envelope.scope, base: base ?? null, mode, model, sandbox },
     onStdout: (chunk) => process.stderr.write(chunk),
   });
 
@@ -114,3 +121,5 @@ export async function run(argv = [], ctx = {}) {
 }
 
 export default run;
+
+runAsMain(import.meta.url, run, "review");

@@ -9,6 +9,7 @@
  */
 
 import { parseCommandInput } from "../lib/args.mjs";
+import { runAsMain } from "../lib/cli-entry.mjs";
 import {
   buildStatusSnapshot,
   buildSingleJobSnapshot,
@@ -99,3 +100,5 @@ function sleep(ms) {
 }
 
 export default run;
+
+runAsMain(import.meta.url, run, "status");

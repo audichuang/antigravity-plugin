@@ -14,7 +14,10 @@
  *   --json                emit JSON instead of markdown
  */
 
+import fs from "node:fs";
+
 import { parseCommandInput } from "../lib/args.mjs";
+import { runAsMain } from "../lib/cli-entry.mjs";
 import { resolveWorkspaceRoot } from "../lib/workspace.mjs";
 import { buildRescuePrompt } from "../lib/prompt-templates.mjs";
 import { runForegroundJob, startBackgroundJob, waitForJob } from "../lib/job-helpers.mjs";
@@ -22,25 +25,31 @@ import { outputCommandResult } from "../lib/render.mjs";
 
 export async function run(argv = [], ctx = {}) {
   const { options, positionals } = parseCommandInput(argv, {
-    valueOptions: ["conversation", "model", "cwd", "add-dir"],
+    valueOptions: ["conversation", "model", "cwd", "add-dir", "prompt-file"],
     booleanOptions: ["background", "wait", "resume", "continue", "fresh", "json"],
   });
 
   const cwd = options.cwd ? String(options.cwd) : ctx.cwd ?? process.cwd();
   const workspaceRoot = resolveWorkspaceRoot(cwd);
 
-  const userPrompt = positionals.join(" ").trim();
+  let userPrompt = positionals.join(" ").trim();
+  if (options["prompt-file"]) {
+    try {
+      userPrompt = fs.readFileSync(String(options["prompt-file"]), "utf8").trim();
+    } catch (err) {
+      process.stderr.write(`antigravity:rescue — could not read --prompt-file: ${err?.message ?? err}\n`);
+      return 1;
+    }
+  }
   if (!userPrompt && !options.resume && !options.continue && !options.conversation) {
-    process.stderr.write("antigravity:rescue — no task text provided. Pass a prompt or --conversation <id>.\n");
+    process.stderr.write(
+      "antigravity:rescue — no task text provided. Pass a prompt, --prompt-file <path>, or --conversation <id>.\n",
+    );
     return 1;
   }
 
-  if (options.model) {
-    process.stderr.write(
-      `antigravity:rescue — note: --model is accepted for forward-compatibility but ` +
-        `agy 1.0.1 does not expose a per-invocation model flag yet. Ignoring "${options.model}".\n`,
-    );
-  }
+  // agy 1.0.7 has a native --model; forward it verbatim (no aliasing).
+  const model = options.model ? String(options.model) : undefined;
 
   // Resolve conversation mode. --conversation wins; then --resume/--continue; then fresh.
   let mode = "print";
@@ -71,7 +80,7 @@ export async function run(argv = [], ctx = {}) {
       conversationId,
       addDirs,
       cwd: workspaceRoot,
-      request: { mode, addDirs },
+      request: { mode, addDirs, model },
     });
     const payload = {
       jobId: job.id,
@@ -98,8 +107,9 @@ export async function run(argv = [], ctx = {}) {
     mode,
     conversationId,
     addDirs,
+    model,
     cwd: workspaceRoot,
-    request: { mode, addDirs },
+    request: { mode, addDirs, model },
     onStdout: (chunk) => process.stderr.write(chunk),
   });
 
@@ -125,3 +135,5 @@ function truncate(s, n) {
 }
 
 export default run;
+
+runAsMain(import.meta.url, run, "rescue");
