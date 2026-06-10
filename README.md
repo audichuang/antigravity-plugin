@@ -32,11 +32,15 @@ preferred AI host so you can:
 
 ## Where it runs
 
+The marketplace is named `antigravity` (from `.claude-plugin/marketplace.json`),
+so the plugin installs as `antigravity@antigravity` after adding this fork's repo
+as a marketplace.
+
 | Host             | Install command                                                    |
 |------------------|--------------------------------------------------------------------|
-| Claude Code      | `claude plugin install antigravity@audichuang`                     |
+| Claude Code      | `claude plugin marketplace add audichuang/antigravity-plugin` then `claude plugin install antigravity@antigravity` |
 | Codex CLI        | `codex plugin marketplace add <path-to-clone>` then `$antigravity setup` (see [docs/INSTALL.md](./docs/INSTALL.md)) |
-| Antigravity (agy)| `agy plugin install antigravity@audichuang`                        |
+| Antigravity (agy)| `agy plugin marketplace add audichuang/antigravity-plugin` then `agy plugin install antigravity@antigravity` |
 | Standalone       | `npx antigravity-plugin <command>`                                 |
 
 ## Requirements
@@ -48,11 +52,11 @@ preferred AI host so you can:
 ## Quick start (Claude Code)
 
 ```bash
-# 1. add the marketplace
+# 1. add the marketplace (registered as `antigravity`)
 claude plugin marketplace add audichuang/antigravity-plugin
 
-# 2. install
-claude plugin install antigravity@audichuang
+# 2. install  (plugin@marketplace = antigravity@antigravity)
+claude plugin install antigravity@antigravity
 
 # 3. one-time auth
 /antigravity:setup

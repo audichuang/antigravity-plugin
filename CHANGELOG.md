@@ -84,5 +84,6 @@ ahead of the June 18, 2026 Gemini CLI deprecation.
 - `gemini --experimental-acp` runtime path — deprecation deadline is too close
   to maintain a transitional fallback.
 
-[Unreleased]: https://github.com/sakibsadmanshajib/antigravity-plugin/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/audichuang/antigravity-plugin/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/audichuang/antigravity-plugin/releases/tag/v0.2.0
 [0.1.0]: https://github.com/sakibsadmanshajib/antigravity-plugin/releases/tag/v0.1.0

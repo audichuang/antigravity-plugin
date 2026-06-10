@@ -53,7 +53,7 @@ node /path/to/antigravity-plugin/bin/antigravity.mjs status
 
 ```bash
 claude plugin marketplace add /path/to/antigravity-plugin
-claude plugin install antigravity@sakibsadmanshajib
+claude plugin install antigravity@antigravity
 ```
 
 Inside Claude Code:
@@ -98,7 +98,7 @@ $antigravity status
 ## Host 4 — agy native
 
 ```bash
-agy plugin install antigravity@sakibsadmanshajib
+agy plugin install antigravity@antigravity
 #   OR (if Claude Code plugin already imported on this machine)
 agy plugin import claude
 
@@ -123,6 +123,6 @@ Open `docs/SMOKE-REPORT-<date>.md` and capture:
    `agy --print 'hi'` cold-start and `/antigravity:setup`).
 4. Wall-clock duration per host.
 
-If any host fails, file an issue against `sakibsadmanshajib/antigravity-plugin`
+If any host fails, file an issue against `audichuang/antigravity-plugin`
 with the report attached. Do **not** tag `v0.1.0` until every host has at least
 one green smoke run.
